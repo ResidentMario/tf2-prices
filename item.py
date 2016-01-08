@@ -1,12 +1,10 @@
-from pandas import Series, DataFrame
+from pandas import DataFrame
 import pandas as pd
 import numpy as np
 import requests
 import json
 import arrow
 import os
-
-# TODO: Not working at all.
 
 
 class Item:
@@ -88,8 +86,7 @@ def _value_at(currency, date, key, metal):
     elif currency == "keys":
         value_entry = key.history[:f_date].tail(1)
         metal_conversion = _value_at("metal", date, key, metal)
-        return (metal_conversion[0] * value_entry['value'][0],
-                metal_conversion[1] * value_entry['value_high'][0])
+        return value_entry['value'][0], value_entry['value_high'][0]
 
 
 def _get_key(filename='backpack_tf_account_credentials.json'):
