@@ -6,6 +6,8 @@ import json
 import arrow
 import os
 from bs4 import BeautifulSoup
+import urllib
+import time
 
 
 class Item:
@@ -15,7 +17,7 @@ class Item:
 
     name = ""
     history = DataFrame()
-    
+
     def __repr__(self):
         return str(self.history)
 
@@ -32,56 +34,56 @@ class Item:
         :return:
         """
         self.name = item
-        str_repr = ""
-        if 'quality' not in kwargs.keys():
-            str_repr += "unique "
+        if item == "Mann Co. Supply Crate Key":
+            key = _key_prices()
+            self.history = key.history
+        elif item == "Refined Metal":
+            metal = _metal_prices()
+            self.history = metal.history
         else:
-            str_repr += kwargs['quality'].lower() + " "
-        if 'craftable' not in kwargs.keys():
-            str_repr += "craftable "
-        else:
-            assert kwargs['tradable'] == 1
-            str_repr += "non-craftable "
-        if 'tradable' not in kwargs.keys():
-            str_repr += "tradable "
-        elif kwargs['tradable'] == 0:
-            str_repr += "non-tradable "
-        if "{0}{1}.csv".format(str_repr, item.lower()) in [f for f in os.listdir('.') if os.path.isfile(f)]:
-            self.read_csv("{0}{1}.csv".format(str_repr, item.lower()))
-        else:
-            if len(item) > 0:
-                # Make the API call.
-                params = {"key": _get_key(), "item": item}
-                params.update(kwargs)
-                data = json.loads(requests.get("http://backpack.tf/api/IGetPriceHistory/v1/",
-                                               params=params).text)['response']['history']
-                # Parse it into a `pandas` `DataFrame`.
-                frame = DataFrame(data,
-                                  index=[np.datetime64(str(arrow.get(t['timestamp']).format('YYYY-MM-DD'))) for t in data],
-                                  columns=["currency", "value", "value_high"])
-                # Throw out earlier dates, for the moment. `2013-01-01` is the starting point for all knowledge.
-                frame = frame[pd.to_datetime('2013-01-01'):]
-                # Extrapolate Refined Metal price back to `2013-01-01`.
-                if item == "Refined Metal":
-                    frame.loc[pd.to_datetime('2013-01-01')] = ['usd', 0.40, 0.40]
-                    frame = frame.sort_index()
-                # Rebase rows from `2013-01-01` forward to USD.
-                elif item == "Mann Co. Supply Crate Key":
-                    pass
-                else:
+            str_repr = ""
+            if 'quality' not in kwargs.keys():
+                str_repr += "unique "
+            else:
+                str_repr += kwargs['quality'].lower() + " "
+            if 'craftable' not in kwargs.keys():
+                str_repr += "craftable "
+            else:
+                assert kwargs['tradable'] == 1
+                str_repr += "non-craftable "
+            if 'tradable' not in kwargs.keys():
+                str_repr += "tradable "
+            elif kwargs['tradable'] == 0:
+                str_repr += "non-tradable "
+            if "{0}{1}.csv".format(str_repr, item.lower()) in [f for f in os.listdir('.') if os.path.isfile(f)]:
+                self.read_csv("{0}{1}.csv".format(str_repr, item.lower()))
+            else:
+                if len(item) > 0:
+                    # Make the API call.
+                    params = {"key": _get_key(), "item": item}
+                    params.update(kwargs)
+                    data = json.loads(requests.get("http://backpack.tf/api/IGetPriceHistory/v1/",
+                                                   params=params).text)['response']['history']
+                    # Parse it into a `pandas` `DataFrame`.
+                    frame = DataFrame(data,
+                                      index=[np.datetime64(str(arrow.get(t['timestamp']).format('YYYY-MM-DD'))) for t in
+                                             data],
+                                      columns=["currency", "value", "value_high"])
+                    # Throw out earlier dates, for the moment. `2013-01-01` is the starting point for all knowledge.
+                    frame = frame[pd.to_datetime('2013-01-01'):]
+                    # Convert currency.
                     metal = _metal_prices()
                     key = _key_prices()
                     for i in range(0, len(frame.index)):
                         data = frame.iloc[i]
                         date = data.name
-                        if date >= pd.to_datetime('2013-01-01'):
-                            currency = data['currency']
-                            conversion_rate = _value_at(currency, date, key, metal)
-                            frame.iat[i, 0] = 'usd'
-                            frame.iat[i, 1] *= conversion_rate[0]
-                            frame.iat[i, 2] *= conversion_rate[1]
-                self.history = frame
-                self.to_csv("{0}{1}.csv".format(str_repr, item.lower()))
+                        currency = data['currency']
+                        conversion_rate = _value_at(currency, date, key, metal)
+                        frame.iat[i, 0] = 'usd'
+                        frame.iat[i, 1] *= conversion_rate[0]
+                        frame.iat[i, 2] *= conversion_rate[1]
+                    self.history = frame
+                    self.to_csv("{0}{1}.csv".format(str_repr, item.lower()))
 
     def to_csv(self, filename):
         """
@@ -89,7 +91,7 @@ class Item:
         :param filename: The filename at which to save the `Item`.
         """
         self.history.to_csv(filename)
-    
+
     def read_csv(self, filename):
         """
         Pass-through wrapper that loads the `Item` in CSV.
@@ -119,7 +121,6 @@ def _value_at(currency, date, key, metal):
     # Convert key prices based on historical data.
     elif currency == "keys":
         value_entry = key.history[:f_date].tail(1)
-        metal_conversion = _value_at("metal", date, key, metal)
         return value_entry['value'][0], value_entry['value_high'][0]
 
 
@@ -128,8 +129,8 @@ def _get_key(filename='backpack_tf_account_credentials.json'):
         return json.load(open(filename))['credentials']['token']
     else:
         raise IOError(
-            'This API requires a backpack.tf credentials token to work. Did you forget to generate one? For more '
-            'information refer to:\n\nhttps://backpack.tf/api/pricehistory')
+                'This API requires a backpack.tf credentials token to work. Did you forget to generate one? For more '
+                'information refer to:\n\nhttps://backpack.tf/api/pricehistory')
 
 
 def _metal_prices(filename='unique craftable tradable refined metal.csv'):
@@ -144,17 +145,26 @@ def _metal_prices(filename='unique craftable tradable refined metal.csv'):
         ret.read_csv(filename)
         return ret
     else:
-        metal = Item("Refined Metal")
-        # metal.history.loc[pd.to_datetime('2013-01-01')] = ['usd', 0.40, 0.40]
-        # metal = metal.history.sort_index()
+        params = {"key": _get_key(), "item": "Refined Metal"}
+        data = json.loads(requests.get("http://backpack.tf/api/IGetPriceHistory/v1/",
+                                       params=params).text)['response']['history']
+        # Parse it into a `pandas` `DataFrame`.
+        frame = DataFrame(data,
+                          index=[np.datetime64(str(arrow.get(t['timestamp']).format('YYYY-MM-DD'))) for t in
+                                 data],
+                          columns=["currency", "value", "value_high"])
+        # Extrapolate Refined Metal price back to `2013-01-01`.
+        frame.loc[pd.to_datetime('2013-01-01')] = ['usd', 0.40, 0.40]
+        frame = frame.sort_index()
+        metal = Item("")
+        metal.history = frame
         metal.to_csv(filename)
         return metal
 
 
 def _key_prices(filename='unique craftable tradable mann co. supply crate key.csv'):
     """
-    Retrieves the key price table. Since this operation is needed whenever a conversion is made the data is saved
-    locally as a CSV and extracted from there.
+    Retrieves the key price table.
     :param filename: The filename at which key prices are saved.
     :return: The `DataFrame` price history object.
     """
@@ -163,8 +173,28 @@ def _key_prices(filename='unique craftable tradable mann co. supply crate key.cs
         ret.read_csv(filename)
         return ret
     else:
-        key = Item("Mann Co. Supply Crate Key")
-        key.to_csv(filename)
+        params = {"key": _get_key(), "item": "Mann Co. Supply Crate Key"}
+        data = json.loads(requests.get("http://backpack.tf/api/IGetPriceHistory/v1/",
+                                       params=params).text)['response']['history']
+        # Parse it into a `pandas` `DataFrame`.
+        frame = DataFrame(data,
+                          index=[np.datetime64(str(arrow.get(t['timestamp']).format('YYYY-MM-DD'))) for t in
+                                 data],
+                          columns=["currency", "value", "value_high"])
+        frame = frame[pd.to_datetime('2013-01-01'):]
+        metal = _metal_prices()
+        for i in range(0, len(frame.index)):
+            data = frame.iloc[i]
+            date = data.name
+            frame = frame[pd.to_datetime('2013-01-01'):]
+            currency = data['currency']
+            conversion_rate = _value_at(currency, date, None, metal)
+            frame.iat[i, 0] = 'usd'
+            frame.iat[i, 1] *= conversion_rate[0]
+            frame.iat[i, 2] *= conversion_rate[1]
+        key = Item("")
+        key.history = frame
+        key.to_csv(filename=filename)
         return key
 
 
@@ -174,5 +204,16 @@ def get_all_items():
     :return:
     """
     spreadsheet = BeautifulSoup(requests.get("http://backpack.tf/pricelist/spreadsheet").text, 'html.parser')
-    return spreadsheet.find_all("a", {"class": 'qlink'})
-    # return requests.get("http://backpack.tf/pricelist/spreadsheet").text
+    item_strings = spreadsheet.find_all("a", {"class": 'qlink'})
+    # return item_strings
+    # return [urllib.request.unquote(str(item_string)).split("/")[3] for item_string in item_strings]
+    ret = []
+    for item_string in item_strings:
+        item_string = str(item_string)
+        string_repr = "{0} {1} {2} {3}".format(item_string.split("/")[2],
+                                               item_string.split("/")[4],
+                                               item_string.split("/")[5][:item_string.split("/")[5].find('"')],
+                                               urllib.request.unquote(item_string.split("/")[3]))
+        # string_repr = urllib.request.unquote(str(item_string).split("/")[3])
+        ret.append(string_repr)
+    return ret
