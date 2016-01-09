@@ -39,4 +39,6 @@ pip-delete-this-directory.txt
 # Project-specific
 *.csv
 *.json
+market_test.py
+item_test.py
 test.py

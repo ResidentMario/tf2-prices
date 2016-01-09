@@ -1,4 +1,5 @@
 from pandas import Panel
+import pandas as pd
 
 
 class Market:
@@ -11,6 +12,6 @@ class Market:
     def __repr__(self):
         return str(self.history)
 
-    def __init__(self, dict_of_items):
-        # dict_of_frames = dict((name, item.history) for (name, item) in dict_of_items)
-        self.history = Panel(dict_of_frames)
+    def __init__(self, list_of_items):
+        dict_of_frames = {item.name: item.history for item in list_of_items}
+        self.history = pd.Panel.from_dict(dict_of_frames)
