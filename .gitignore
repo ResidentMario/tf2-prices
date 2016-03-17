@@ -37,7 +37,6 @@ pip-delete-this-directory.txt
 /.ipynb_checkpoints
 
 # Project-specific
-*.csv
 *.json
 market_test.py
 item_test.py
